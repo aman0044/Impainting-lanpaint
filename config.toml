@@ -1,0 +1,20 @@
+# LanPaint model paths
+# Set "path" to a local directory or a HuggingFace Hub ID.
+# Leave "path" empty ("") to use the default Hub ID from the registry.
+# Set "local_files_only = true" to disable Hub downloads.
+
+[models.flux-klein]
+path = "/home/aman/.cache/huggingface/hub/models--black-forest-labs--FLUX.2-klein-4B/snapshots/e7b7dc27f91deacad38e78976d1f2b499d76a294"
+local_files_only = true
+
+[models.sd3]
+path = ""
+local_files_only = false
+
+[models.z-image]
+path = ""
+local_files_only = false
+
+[models.qwen]
+path = ""
+local_files_only = false

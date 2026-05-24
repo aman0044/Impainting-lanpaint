@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: lanpaint-pipeline
+Version: 0.1.0
+Summary: LanPaint: training-free inpainting pipeline for diffusion models
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: LanPaint @ git+https://github.com/scraed/LanPaint.git
+Requires-Dist: torch==2.12.0
+Requires-Dist: diffusers
+Requires-Dist: numpy
+Requires-Dist: Pillow
+Requires-Dist: scipy
+Requires-Dist: tqdm
+Requires-Dist: transformers>=5.9.0
+Requires-Dist: accelerate>=1.13.0
+Requires-Dist: streamlit>=1.40.0
+Requires-Dist: streamlit-drawable-canvas>=0.9.3
+Requires-Dist: torchvision>=0.27.0
+Dynamic: license-file
