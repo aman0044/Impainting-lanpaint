@@ -93,6 +93,7 @@ class LanPaintInpaintPipeline:
         prompt: Optional[str] = None,
         image: Union[str, Image.Image],
         mask_image: Optional[Union[str, Image.Image]] = None,
+        ref_images: Optional[list] = None,
         outpaint_padding: Optional[str] = None,
         save_preprocess_dir: Optional[str] = None,
         negative_prompt: str = "",
@@ -127,9 +128,25 @@ class LanPaintInpaintPipeline:
             with torch.no_grad():
                 _ = self.adapter.encode_prompt(prompt, negative_prompt, device)
 
+        # Pre-process optional reference images before encoding.
+        # Resize to source dimensions so they pack at the same resolution.
+        ref_tensors = None
+        if ref_images:
+            from diffusers.utils import load_image as _load_image
+            model_dtype = self.adapter.dtype
+            ref_tensors = []
+            for ri in ref_images:
+                ref_pil = _load_image(ri).convert("RGB") if isinstance(ri, str) else ri.convert("RGB")
+                ref_pil = ref_pil.resize((image_width, image_height), Image.BICUBIC)
+                ref_t = self.adapter.image_processor.preprocess(
+                    ref_pil, height=image_height, width=image_width, resize_mode="crop"
+                ).to(device, model_dtype)
+                ref_tensors.append(ref_t)
+
         with torch.no_grad():
             image_latents = self.adapter.encode_and_prepare(
-                img_tensor, image_height, image_width, generator, device
+                img_tensor, image_height, image_width, generator, device,
+                ref_img_tensors=ref_tensors,
             )
         y_latent = image_latents.latent
 

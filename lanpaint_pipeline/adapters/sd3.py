@@ -102,6 +102,7 @@ class SD3Adapter(ModelAdapter):
         width: int,
         generator: torch.Generator,
         device: torch.device,
+        ref_img_tensors=None,
     ) -> ImageLatents:
         """
         VAE-encode the image.

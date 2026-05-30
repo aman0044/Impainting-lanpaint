@@ -201,6 +201,7 @@ st.markdown("Upload an image · paint the region to edit · describe the change 
 # Track these across columns (set in col_left, read in col_right)
 orig_img: Optional[Image.Image] = None
 mask_pil: Optional[Image.Image] = None
+ref_img: Optional[Image.Image] = None
 
 col_left, col_right = st.columns([1.15, 1], gap="large")
 
@@ -266,6 +267,23 @@ with col_left:
                 mask_np = np.where(alpha > 0, 0, 255).astype(np.uint8)
                 mask_canvas = Image.fromarray(mask_np, mode="L")
                 mask_pil = mask_canvas.resize((ow, oh), Image.NEAREST)
+
+        # ── Reference image (Flux Klein only) ───────────────────────────────
+        with st.expander("📎 Reference image — optional, Flux only"):
+            st.caption(
+                "Upload a second image as visual inspiration. "
+                "The model will use it alongside your prompt to guide generation "
+                "in the masked region."
+            )
+            ref_uploaded = st.file_uploader(
+                "Reference image",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="ref_upload",
+                label_visibility="collapsed",
+            )
+            if ref_uploaded is not None:
+                ref_img = Image.open(ref_uploaded).convert("RGB")
+                st.image(ref_img, use_container_width=True)
 
     else:
         st.markdown(
@@ -353,6 +371,7 @@ with col_right:
                     negative_prompt=negative_prompt,
                     image=orig_img,
                     mask_image=mask_pil,
+                    ref_images=[ref_img] if ref_img is not None else None,
                     guidance_scale=guidance_scale,
                     num_inference_steps=num_steps,
                     seed=int(seed),

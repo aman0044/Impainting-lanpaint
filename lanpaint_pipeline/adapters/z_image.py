@@ -100,6 +100,7 @@ class ZImageAdapter(ModelAdapter):
         width: int,
         generator: torch.Generator,
         device: torch.device,
+        ref_img_tensors=None,
     ) -> ImageLatents:
         """VAE-encode image; Z-Image uses (latent - shift_factor) * scaling_factor."""
         vae = self.pipe.vae

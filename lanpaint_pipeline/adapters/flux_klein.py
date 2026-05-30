@@ -48,6 +48,9 @@ class FluxKleinAdapter(ModelAdapter):
         self._y_packed = None
         self._latent_ids = None
         self._ref_image_ids = None
+        # Populated by set_extra_ref_images (optional, Flux-only)
+        self._extra_ref_packed = None
+        self._extra_ref_ids = None
 
     # ---- ModelAdapter implementation ----
 
@@ -116,22 +119,24 @@ class FluxKleinAdapter(ModelAdapter):
         width: int,
         generator: torch.Generator,
         device: torch.device,
+        ref_img_tensors: list | None = None,
     ) -> ImageLatents:
-        # Encode reference image → packed latent + ref IDs
-        # Use a CPU generator for VAE latent_dist.sample() to match diffusers
-        # convention and ensure consistent results across devices (CPU/MPS/CUDA).
-        cpu_generator = torch.Generator("cpu").manual_seed(generator.initial_seed())
-        image_latents, ref_image_ids = self.pipe.prepare_image_latents(
-            images=[img_tensor],
-            batch_size=1,
-            generator=cpu_generator,
-            device=device,
-            dtype=self.pipe.vae.dtype,
-        )
-        self._y_packed = image_latents.to(torch.float32)
-        self._ref_image_ids = ref_image_ids
+        """
+        VAE-encode the source image (and optional reference images) and prepare latents.
 
-        # Prepare noise latent shape + latent IDs (for decode)
+        When ref_img_tensors are supplied, source + refs are packed together in a
+        single prepare_image_latents call so they receive proper non-overlapping 3D
+        positional IDs.  The result is split by L1 (source sequence length) so that
+        _y_packed always contains only the source — keeping LanPaint's mask maths
+        and y_latent unchanged.
+        """
+        self._extra_ref_packed = None
+        self._extra_ref_ids = None
+
+        cpu_generator = torch.Generator("cpu").manual_seed(generator.initial_seed())
+
+        # Noise latent IDs — computed first so we have L1 = latent_ids.shape[1],
+        # which equals the source image's packed-sequence length (same H, W).
         num_ch = self.pipe.transformer.config.in_channels // 4
         _, latent_ids = self.pipe.prepare_latents(
             batch_size=1,
@@ -144,6 +149,27 @@ class FluxKleinAdapter(ModelAdapter):
             latents=None,
         )
         self._latent_ids = latent_ids
+        L1 = latent_ids.shape[1]  # packed-sequence length of the source image
+
+        # Pack source + any reference images together so positional IDs are
+        # assigned jointly (no coordinate collisions between images).
+        images = [img_tensor] + (ref_img_tensors or [])
+        image_latents, ref_image_ids = self.pipe.prepare_image_latents(
+            images=images,
+            batch_size=1,
+            generator=cpu_generator,
+            device=device,
+            dtype=self.pipe.vae.dtype,
+        )
+
+        # Split: first L1 tokens → source (used by LanPaint + mask),
+        #        remaining tokens → reference context (used only in transformer).
+        self._y_packed = image_latents[:, :L1, :].to(torch.float32)
+        self._ref_image_ids = ref_image_ids[:, :L1, :]
+
+        if ref_img_tensors and image_latents.shape[1] > L1:
+            self._extra_ref_packed = image_latents[:, L1:, :].to(torch.float32)
+            self._extra_ref_ids = ref_image_ids[:, L1:, :]
 
         self._image_latents = ImageLatents(
             latent=self._y_packed,
@@ -210,11 +236,15 @@ class FluxKleinAdapter(ModelAdapter):
         seq_len = x.shape[1]
         model_dtype = self.dtype
 
-        # Concatenate reference image to sequence
-        latent_model_input = torch.cat(
-            [x, self._y_packed.to(x.device, x.dtype)], dim=1,
-        )
-        img_ids = torch.cat([self._latent_ids, self._ref_image_ids], dim=1)
+        # Concatenate source ref, then any extra reference images, to the noisy latent
+        ref_parts = [self._y_packed.to(x.device, x.dtype)]
+        ids_parts = [self._latent_ids, self._ref_image_ids]
+        if self._extra_ref_packed is not None:
+            ref_parts.append(self._extra_ref_packed.to(x.device, x.dtype))
+            ids_parts.append(self._extra_ref_ids)
+
+        latent_model_input = torch.cat([x] + ref_parts, dim=1)
+        img_ids = torch.cat(ids_parts, dim=1)
         t_tensor = torch.full(
             (x.shape[0],), flow_t, device=x.device, dtype=model_dtype,
         )

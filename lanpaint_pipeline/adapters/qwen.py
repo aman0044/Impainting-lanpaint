@@ -121,6 +121,7 @@ class QwenAdapter(ModelAdapter):
         width: int,
         generator: torch.Generator,
         device: torch.device,
+        ref_img_tensors=None,
     ) -> ImageLatents:
         """
         VAE-encode the image, encode prompts with VL encoder, prepare packed latents.

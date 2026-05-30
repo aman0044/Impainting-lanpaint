@@ -162,6 +162,7 @@ class ModelAdapter(ABC):
         width: int,
         generator: torch.Generator,
         device: torch.device,
+        ref_img_tensors=None,
     ) -> ImageLatents:
         """
         VAE-encode the image and prepare all latent metadata.
